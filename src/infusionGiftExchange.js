@@ -4,7 +4,7 @@ Licensed under the Educational Community License (ECL), Version 2.0 or the New
 BSD license. You may not use this file except in compliance with one these
 Licenses.
 You may obtain a copy of the ECL 2.0 License and BSD License at
-TODO ADD URL TO LICENCE
+https://raw.githubusercontent.com/BlueSlug/infusionGiftExchange/master/LICENCE.txt
 */
 
 "use strict";
@@ -17,6 +17,7 @@ var nodemailer = require("nodemailer");
 fluid.defaults("fluid.giftExchange", {
     gradeNames: "fluid.component",
     giftExchangeOptions: {
+        hostService: null,
         hostAddress: null,
         hostPort: 25, //default SMTP port
         hostSecure: false,
@@ -30,7 +31,10 @@ fluid.defaults("fluid.giftExchange", {
         // messageTextTemplate may contain references to %name,
         // %recipient and %interests, though none are required
         messageTextTemplate: "Hey %name! Your gift exhange recipient is %recipient! They are interested in: %interests.\nHappy giving!",
-        senderAddress: null // sender's email address, should be accepted by host
+        senderAddress: null, // sender's email address, should be accepted by host
+        // If customTransportKeys is not null, it will be used verbatim,
+        // instead of the values defined above.
+        customTransportKeys: null
     },
     participants: [
         // An array of participants in the gift exhange,
@@ -72,17 +76,6 @@ fluid.giftExchange.swapPositions = function (collection, indexOne, indexTwo) {
     collection[indexTwo] = fluid.copy(pocket);
 
     return collection;
-};
-
-// Returns the number of derangements for a collection of size n
-// As described in: http://epubs.siam.org/doi/pdf/10.1137/1.9781611972986.7
-fluid.giftExchange.numberOfDerangements = function (n) {
-    return Math.floor((fluid.giftExchange.factorial(n) + 1) / Math.E);
-};
-
-// Returns n factorial. This could get messy...
-fluid.giftExchange.factorial = function (n) {
-    return n * (n === 1 || n === 0 ? 1 : fluid.giftExchange.factorial(n - 1));
 };
 
 // given a list of participants, selects a unique recipient for each one
@@ -130,17 +123,22 @@ fluid.giftExchange.shuffleParticipants = function (participants) {
 };
 
 fluid.giftExchange.getEmailTransporter = function (giftExchangeOptions) {
-    return nodemailer.createTransport({
-        host: giftExchangeOptions.hostAddress,
-        port: giftExchangeOptions.hostPort,
-        secure: giftExchangeOptions.hostSecure, // true for 465, false for other ports
-        auth: {
-            user: giftExchangeOptions.hostAuth.username, // generated ethereal user
-            pass: giftExchangeOptions.hostAuth.password  // generated ethereal password
-        },
-        logger: giftExchangeOptions.mailerLogging,
-        debug: giftExchangeOptions.mailerDebug
-    });
+    if (giftExchangeOptions.customTransportKeys) {
+        return nodemailer.createTransport(giftExchangeOptions.customTransportKeys);
+    } else {
+        return nodemailer.createTransport({
+            service: giftExchangeOptions.hostService,
+            host: giftExchangeOptions.hostAddress,
+            port: giftExchangeOptions.hostPort,
+            secure: giftExchangeOptions.hostSecure, // true for 465, false for other ports
+            auth: {
+                user: giftExchangeOptions.hostAuth.username, // generated ethereal user
+                pass: giftExchangeOptions.hostAuth.password  // generated ethereal password
+            },
+            logger: giftExchangeOptions.mailerLogging,
+            debug: giftExchangeOptions.mailerDebug
+        });
+    }
 };
 
 fluid.giftExchange.notifyParticipant = function (participant, giftExchangeOptions, emailTransporter) {
@@ -167,23 +165,6 @@ fluid.giftExchange.sendEmail = function (mailOptions, emailTransporter) {
         fluid.log(fluid.logLevel.IMPORTANT, "Message sent: %s", info.messageId);
         fluid.log(fluid.logLevel.IMPORTANT, nodemailer.getTestMessageUrl(info));
     });
-};
-
-// returns true if a participant is the same person as the recipient, false otherwise
-// participant: an object containing strings representing name and emailAddress
-// recipient: same structure as participant
-fluid.giftExchange.participantIsRecipient = function (participant, recipient) {
-    //console.log(recipient);
-    if (participant && recipient) {
-        if (participant.name !== recipient.name && participant.emailAddress !== recipient.emailAddress) {
-            return false; // they aren't the same person
-        } else {
-            fluid.log(fluid.logLevel.INFO, "Problem: recipient is the participant: " + participant.name);
-            return true; // they are the same person
-        }
-    } else {
-        return false;
-    }
 };
 
 // Returns an integer index value between 0 and a maximum value
